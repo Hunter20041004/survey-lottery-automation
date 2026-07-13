@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,9 +9,79 @@ from survey_lottery.safety import find_forbidden_content
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK_PATH = PROJECT_ROOT / "notebooks" / "Survey_Lottery_Automation.ipynb"
+WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
+
+CHECKOUT_PIN = "34e114876b0b11c390a56381ad16ebd13914f8d5"
+SETUP_PYTHON_PIN = "a26af69be951a213d495a4c3e4e4022e16d87065"
+
+
+def assert_ci_workflow_contract(workflow: str) -> None:
+    required = (
+        "permissions:\n  contents: read",
+        "timeout-minutes: 10",
+        "concurrency:",
+        'python-version: ["3.11", "3.12"]',
+        f"actions/checkout@{CHECKOUT_PIN}",
+        "persist-credentials: false",
+        f"actions/setup-python@{SETUP_PYTHON_PIN}",
+        "python3 -m pip install --upgrade pip setuptools",
+        "python3 -m pip install -e . pip-audit",
+        "python3 -m pip check",
+        "python3 -m pip_audit",
+        "PYTHONPATH=src python3 -m unittest discover -s tests -v",
+    )
+    for snippet in required:
+        if snippet not in workflow:
+            raise AssertionError(f"CI workflow is missing required contract: {snippet}")
+
+    if workflow.count("permissions:") != 1 or "contents: write" in workflow:
+        raise AssertionError("CI workflow permissions must remain read-only")
+
+    forbidden = (
+        "gmail",
+        "google",
+        "smtp",
+        "secrets.",
+        "env:",
+        "services:",
+        "continue-on-error",
+        "|| true",
+        "curl ",
+        "wget ",
+    )
+    lowered = workflow.lower()
+    for snippet in forbidden:
+        if snippet in lowered:
+            raise AssertionError(f"CI workflow contains forbidden behavior: {snippet}")
+
+    expected_actions = {
+        "actions/checkout": CHECKOUT_PIN,
+        "actions/setup-python": SETUP_PYTHON_PIN,
+    }
+    action_refs = re.findall(r"uses:\s*([^@\s]+)@([^\s#]+)", workflow)
+    if len(action_refs) != len(expected_actions):
+        raise AssertionError("CI workflow must use exactly the approved official actions")
+    for action, ref in action_refs:
+        if expected_actions.get(action) != ref or not re.fullmatch(r"[0-9a-f]{40}", ref):
+            raise AssertionError(f"CI action must use its approved immutable SHA: {action}")
 
 
 class PortfolioSafetyTests(unittest.TestCase):
+    def test_ci_is_least_privilege_and_runs_real_boundary_suite(self):
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        assert_ci_workflow_contract(workflow)
+
+        hostile_variants = (
+            workflow.replace(CHECKOUT_PIN, "v4", 1),
+            workflow.replace(CHECKOUT_PIN, "v4.3.1", 1),
+            workflow.replace(SETUP_PYTHON_PIN, "v5", 1),
+            workflow.replace(CHECKOUT_PIN, "0" * 40, 1),
+        )
+        for hostile_workflow in hostile_variants:
+            with self.subTest(hostile_workflow=hostile_workflow):
+                with self.assertRaises(AssertionError):
+                    assert_ci_workflow_contract(hostile_workflow)
+
     def test_notebook_is_a_valid_walkthrough_using_the_package(self):
         notebook = json.loads(NOTEBOOK_PATH.read_text(encoding="utf-8"))
 
