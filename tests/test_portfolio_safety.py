@@ -1,5 +1,6 @@
 import json
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -165,15 +166,39 @@ class PortfolioSafetyTests(unittest.TestCase):
 
         self.assertEqual((unsafe_path,), findings)
 
-    def test_portfolio_text_files_contain_no_forbidden_content(self):
-        text_suffixes = {".csv", ".ipynb", ".md", ".py", ".svg", ".toml"}
+    def test_readme_badge_and_tracked_portfolio_text_are_privacy_safe(self):
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        ci_badge = (
+            "[![CI](https://github.com/Hunter20041004/"
+            "survey-lottery-automation/actions/workflows/ci.yml/badge.svg)]"
+            "(https://github.com/Hunter20041004/"
+            "survey-lottery-automation/actions/workflows/ci.yml)"
+        )
+        self.assertIn(ci_badge, readme)
+        self.assertNotIn("img.shields.io/badge/tests-", readme)
+
+        text_suffixes = {
+            ".csv",
+            ".ipynb",
+            ".md",
+            ".py",
+            ".svg",
+            ".toml",
+            ".txt",
+            ".yaml",
+            ".yml",
+        }
+        tracked_paths = subprocess.run(
+            ["git", "ls-files"],
+            cwd=PROJECT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
         portfolio_files = tuple(
-            path
-            for path in PROJECT_ROOT.rglob("*")
-            if path.is_file()
-            and path.suffix in text_suffixes
-            and ".git" not in path.parts
-            and ".worktrees" not in path.parts
+            PROJECT_ROOT / path
+            for path in tracked_paths
+            if Path(path).suffix in text_suffixes
         )
 
         self.assertEqual((), find_forbidden_content(portfolio_files))

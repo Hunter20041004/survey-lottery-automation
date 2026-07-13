@@ -1,7 +1,7 @@
 # Survey Lottery Automation
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-17%20passing-2E7D32)](#testing)
+[![CI](https://github.com/Hunter20041004/survey-lottery-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/Hunter20041004/survey-lottery-automation/actions/workflows/ci.yml)
 [![Privacy](https://img.shields.io/badge/data-synthetic%20only-6A5ACD)](PRIVACY.md)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Hunter20041004/survey-lottery-automation/blob/main/notebooks/Survey_Lottery_Automation.ipynb)
 
