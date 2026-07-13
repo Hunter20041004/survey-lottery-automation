@@ -1,0 +1,16 @@
+.worktrees/
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+!.env.example
+credentials/
+private_data/
+audit_output/
+my.json
+credentials*.json
+service-account*.json
+build/
+dist/
+*.egg-info/
