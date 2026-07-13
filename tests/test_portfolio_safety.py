@@ -19,7 +19,11 @@ def assert_ci_workflow_contract(workflow: str) -> None:
     required = (
         "permissions:\n  contents: read",
         "timeout-minutes: 10",
-        "concurrency:",
+        (
+            "concurrency:\n"
+            "  group: ci-${{ github.workflow }}-${{ github.ref }}\n"
+            "  cancel-in-progress: true"
+        ),
         'python-version: ["3.11", "3.12"]',
         f"actions/checkout@{CHECKOUT_PIN}",
         "persist-credentials: false",
@@ -34,6 +38,12 @@ def assert_ci_workflow_contract(workflow: str) -> None:
         if snippet not in workflow:
             raise AssertionError(f"CI workflow is missing required contract: {snippet}")
 
+    if workflow.count("\non:\n") != 1 or workflow.count("\npermissions:") != 1:
+        raise AssertionError("CI workflow must declare one explicit trigger block")
+    trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    if trigger_block.splitlines() != ["  push:", "  pull_request:"]:
+        raise AssertionError("CI workflow must run only on push and pull_request")
+
     if workflow.count("permissions:") != 1 or "contents: write" in workflow:
         raise AssertionError("CI workflow permissions must remain read-only")
 
@@ -41,7 +51,6 @@ def assert_ci_workflow_contract(workflow: str) -> None:
         "gmail",
         "google",
         "smtp",
-        "secrets.",
         "env:",
         "services:",
         "continue-on-error",
@@ -50,6 +59,8 @@ def assert_ci_workflow_contract(workflow: str) -> None:
         "wget ",
     )
     lowered = workflow.lower()
+    if re.search(r"\bsecrets\s*(?:\.|\[)", lowered):
+        raise AssertionError("CI workflow must not reference GitHub secrets")
     for snippet in forbidden:
         if snippet in lowered:
             raise AssertionError(f"CI workflow contains forbidden behavior: {snippet}")
@@ -76,6 +87,22 @@ class PortfolioSafetyTests(unittest.TestCase):
             workflow.replace(CHECKOUT_PIN, "v4.3.1", 1),
             workflow.replace(SETUP_PYTHON_PIN, "v5", 1),
             workflow.replace(CHECKOUT_PIN, "0" * 40, 1),
+            workflow.replace("cancel-in-progress: true", "cancel-in-progress: false", 1),
+            workflow.replace(
+                "group: ci-${{ github.workflow }}-${{ github.ref }}",
+                "group:",
+                1,
+            ),
+            workflow.replace("  pull_request:\n", "  workflow_dispatch:\n", 1),
+            workflow.replace("  push:\n", "", 1),
+            workflow.replace("  pull_request:\n", "", 1),
+            workflow.replace(
+                "      - name: Run boundary suite\n",
+                "      - name: Read a secret\n"
+                "        run: echo \"${{ secrets['CHECKOUT_TOKEN'] }}\"\n"
+                "      - name: Run boundary suite\n",
+                1,
+            ),
         )
         for hostile_workflow in hostile_variants:
             with self.subTest(hostile_workflow=hostile_workflow):
