@@ -41,8 +41,14 @@ def assert_ci_workflow_contract(workflow: str) -> None:
     if workflow.count("\non:\n") != 1 or workflow.count("\npermissions:") != 1:
         raise AssertionError("CI workflow must declare one explicit trigger block")
     trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-    if trigger_block.splitlines() != ["  push:", "  pull_request:"]:
-        raise AssertionError("CI workflow must run only on push and pull_request")
+    if trigger_block.splitlines() != [
+        "  push:",
+        "  pull_request:",
+        "  workflow_dispatch:",
+    ]:
+        raise AssertionError(
+            "CI workflow must run only on push, pull_request, and workflow_dispatch"
+        )
 
     if workflow.count("permissions:") != 1 or "contents: write" in workflow:
         raise AssertionError("CI workflow permissions must remain read-only")
@@ -94,6 +100,11 @@ class PortfolioSafetyTests(unittest.TestCase):
                 1,
             ),
             workflow.replace("  pull_request:\n", "  workflow_dispatch:\n", 1),
+            workflow.replace(
+                "  workflow_dispatch:\n",
+                "  workflow_dispatch:\n  schedule:\n",
+                1,
+            ),
             workflow.replace("  push:\n", "", 1),
             workflow.replace("  pull_request:\n", "", 1),
             workflow.replace(
